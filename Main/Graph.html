@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>일변수 함수 그래프</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f4f7fb;
+      color: #202124;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 28px;
+    }
+    .controls {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      margin-bottom: 18px;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    input, button {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 16px;
+      border: 1px solid #ccd0d8;
+      border-radius: 8px;
+      background: #fff;
+      box-sizing: border-box;
+    }
+    button {
+      cursor: pointer;
+      background: #3b82f6;
+      color: white;
+      border: none;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    .output {
+      margin-top: 14px;
+      font-size: 14px;
+      color: #444;
+    }
+    canvas {
+      width: 100%;
+      max-width: 900px;
+      height: 500px;
+      border: 1px solid #cfd4db;
+      border-radius: 12px;
+      background: #fff;
+      display: block;
+    }
+    .hint {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #555;
+      line-height: 1.6;
+    }
+    .hint code {
+      background: #eef2ff;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>일변수 함수 그래프</h1>
+    <div class="controls">
+      <div>
+        <label for="expression">함수 y =</label>
+        <input id="expression" type="text" value="x*exp(-x)" placeholder="예: x*exp(-x) 또는 sin(x)" />
+      </div>
+      <div>
+        <label for="xmin">x 최소값</label>
+        <input id="xmin" type="number" value="-10" step="0.5" />
+      </div>
+      <div>
+        <label for="xmax">x 최대값</label>
+        <input id="xmax" type="number" value="10" step="0.5" />
+      </div>
+      <div>
+        <label for="steps">샘플 개수</label>
+        <input id="steps" type="number" value="400" min="50" max="2000" step="50" />
+      </div>
+    </div>
+    <button id="drawButton">그래프 그리기</button>
+    <div class="output" id="message"></div>
+    <canvas id="graphCanvas" width="900" height="500"></canvas>
+    <div class="hint">
+      <p>사용 가능한 함수: <code>sin(x)</code>, <code>cos(x)</code>, <code>tan(x)</code>, <code>exp(x)</code>, <code>log(x)</code>, <code>sqrt(x)</code>, <code>abs(x)</code>, <code>pow(x,2)</code> 등.</p>
+      <p>지수 표현: <code>e</code>를 사용하면 자동으로 <code>Math.E</code>로 변환됩니다. 예: <code>y = x*e^(-x)</code> 대신 <code>x*exp(-x)</code> 또는 <code>x*e**(-x)</code>를 입력할 수 있습니다.</p>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('graphCanvas');
+    const ctx = canvas.getContext('2d');
+    const expressionInput = document.getElementById('expression');
+    const xminInput = document.getElementById('xmin');
+    const xmaxInput = document.getElementById('xmax');
+    const stepsInput = document.getElementById('steps');
+    const message = document.getElementById('message');
+    const drawButton = document.getElementById('drawButton');
+
+    function normalizeExpression(expr) {
+      let normalized = expr.trim();
+      normalized = normalized.replace(/\^/g, '**');
+      normalized = normalized.replace(/\bpi\b/gi, 'Math.PI');
+      normalized = normalized.replace(/\be\b/g, 'Math.E');
+      normalized = normalized.replace(/\blog\b/g, 'Math.log');
+      normalized = normalized.replace(/\bsqrt\b/g, 'Math.sqrt');
+      normalized = normalized.replace(/\bsin\b/g, 'Math.sin');
+      normalized = normalized.replace(/\bcos\b/g, 'Math.cos');
+      normalized = normalized.replace(/\btan\b/g, 'Math.tan');
+      normalized = normalized.replace(/\bexp\b/g, 'Math.exp');
+      normalized = normalized.replace(/\babs\b/g, 'Math.abs');
+      normalized = normalized.replace(/\bpow\b/g, 'Math.pow');
+      normalized = normalized.replace(/\bsinh\b/g, 'Math.sinh');
+      normalized = normalized.replace(/\bcosh\b/g, 'Math.cosh');
+      normalized = normalized.replace(/\btanh\b/g, 'Math.tanh');
+      return normalized;
+    }
+
+    function drawGraph() {
+      const expr = expressionInput.value;
+      const xmin = parseFloat(xminInput.value);
+      const xmax = parseFloat(xmaxInput.value);
+      const steps = parseInt(stepsInput.value, 10);
+      if (isNaN(xmin) || isNaN(xmax) || xmin >= xmax) {
+        message.textContent = 'x 범위를 올바르게 입력하세요. (xmin < xmax)';
+        return;
+      }
+      if (steps < 10) {
+        message.textContent = '샘플 개수는 최소 10개 이상이어야 합니다.';
+        return;
+      }
+      const normalized = normalizeExpression(expr);
+      let f;
+      try {
+        f = new Function('x', 'with (Math) { return ' + normalized + '; }');
+        const test = f(0);
+        if (!isFinite(test) && !Number.isNaN(test)) {
+          throw new Error('유효하지 않은 값');
+        }
+      } catch (error) {
+        message.textContent = '함수 식을 확인하세요: ' + error.message;
+        return;
+      }
+
+      const width = canvas.width;
+      const height = canvas.height;
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+
+      const xs = [];
+      const ys = [];
+      let ymin = Infinity;
+      let ymax = -Infinity;
+
+      for (let i = 0; i <= steps; i += 1) {
+        const x = xmin + (xmax - xmin) * (i / steps);
+        let y;
+        try {
+          y = f(x);
+        } catch {
+          y = NaN;
+        }
+        if (typeof y !== 'number' || !isFinite(y)) {
+          ys.push(NaN);
+          xs.push(x);
+          continue;
+        }
+        xs.push(x);
+        ys.push(y);
+        ymin = Math.min(ymin, y);
+        ymax = Math.max(ymax, y);
+      }
+
+      if (ymin === Infinity || ymax === -Infinity) {
+        message.textContent = '그래프로 그릴 수 있는 y값이 없습니다.';
+        return;
+      }
+      if (ymin === ymax) {
+        ymin -= 1;
+        ymax += 1;
+      }
+
+      const xScale = width / (xmax - xmin);
+      const yScale = height / (ymax - ymin);
+
+      const xZero = xmin <= 0 && xmax >= 0 ? (0 - xmin) * xScale : null;
+      const yZero = ymin <= 0 && ymax >= 0 ? height - (0 - ymin) * yScale : null;
+
+      ctx.strokeStyle = '#888';
+      ctx.lineWidth = 1;
+      if (xZero !== null) {
+        ctx.beginPath();
+        ctx.moveTo(xZero, 0);
+        ctx.lineTo(xZero, height);
+        ctx.stroke();
+      }
+      if (yZero !== null) {
+        ctx.beginPath();
+        ctx.moveTo(0, yZero);
+        ctx.lineTo(width, yZero);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      let started = false;
+      for (let i = 0; i < xs.length; i += 1) {
+        const x = xs[i];
+        const y = ys[i];
+        if (!isFinite(y)) {
+          started = false;
+          continue;
+        }
+        const px = (x - xmin) * xScale;
+        const py = height - (y - ymin) * yScale;
+        if (!started) {
+          ctx.moveTo(px, py);
+          started = true;
+        } else {
+          ctx.lineTo(px, py);
+        }
+      }
+      ctx.stroke();
+
+      ctx.fillStyle = '#000';
+      ctx.font = '13px Arial';
+      ctx.fillText(`x: [${xmin}, ${xmax}]`, 12, 20);
+      ctx.fillText(`y: [${ymin.toFixed(3)}, ${ymax.toFixed(3)}]`, 12, 38);
+
+      message.textContent = '그래프가 성공적으로 그려졌습니다.';
+    }
+
+    drawButton.addEventListener('click', drawGraph);
+    window.addEventListener('load', drawGraph);
+  </script>
+</body>
+</html>
